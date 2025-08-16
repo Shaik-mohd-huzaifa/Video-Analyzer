@@ -4,6 +4,8 @@ A production-ready, scalable video analysis system that combines local vision AI
 
 ## 🏗️ Architecture Overview
 
+![System Architecture](architecture.svg)
+
 ### System Components
 
 1. **Vision AI Processing** (`temporal_worker_gpu.py`)
