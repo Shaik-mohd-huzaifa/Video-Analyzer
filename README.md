@@ -1,391 +1,3 @@
-# Multi-Model Orchestration: Nebius GPT + Local Qwen
-
-A production-ready system for orchestrating cloud-based Nebius GPT with locally-running Qwen models, optimized for GPU memory and performance.
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────┐
-│           Model Orchestrator                 │
-├──────────────┬──────────────┬───────────────┤
-│  Nebius GPT  │  Qwen Vision │ Qwen Structured│
-│   (Cloud)    │   (Local)    │    (Local)    │
-├──────────────┴──────────────┴───────────────┤
-│         GPU Memory Manager                   │
-└─────────────────────────────────────────────┘
-```
-
-## 📋 Prerequisites
-
-- **GPU**: NVIDIA GPU with 8GB+ VRAM (16GB+ recommended)
-- **CUDA**: 11.8 or higher
-- **Python**: 3.8+
-- **Disk Space**: 20-50GB depending on models
-- **RAM**: 16GB+ system memory
-
-## 🚀 Quick Start
-
-### Option 1: Direct Setup (No Docker)
-
-```bash
-# 1. Clone/navigate to project directory
-cd /workspace
-
-# 2. Make setup script executable
-chmod +x setup.sh
-
-# 3. Run setup (creates venv, installs dependencies)
-./setup.sh
-
-# 4. Configure environment
-cp .env.example .env
-# Edit .env with your Nebius API key
-nano .env
-
-# 5. Activate environment
-source activate.sh
-
-# 6. Download Qwen model (start with smallest)
-python download_qwen.py qwen2-vl-2b
-
-# 7. Verify installation
-python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}')"
-
-# 8. Run example
-python example_usage.py
-```
-
-### Option 2: Docker Deployment
-
-```bash
-# 1. Build Docker image
-docker-compose build
-
-# 2. Set environment variables
-export NEBIUS_API_KEY="your_key_here"
-export NEBIUS_GPT_ENDPOINT="https://api.nebius.ai/v1/completions"
-
-# 3. Download models first (outside container)
-python download_qwen.py qwen2-vl-2b
-
-# 4. Start services
-docker-compose up -d
-
-# 5. Check logs
-docker-compose logs -f model-server
-```
-
-## 📦 Model Download Guide
-
-### Available Models
-
-| Model | Size | Purpose | Memory (int8) | Command |
-|-------|------|---------|---------------|---------|
-| qwen2-vl-2b | 5GB | Vision (small) | ~3GB | `python download_qwen.py qwen2-vl-2b` |
-| qwen2-vl-7b | 15GB | Vision (large) | ~8GB | `python download_qwen.py qwen2-vl-7b` |
-| qwen-7b-chat | 14GB | Chat/Structured | ~7GB | `python download_qwen.py qwen-7b-chat` |
-| qwen-14b-chat | 28GB | Chat (large) | ~14GB | `python download_qwen.py qwen-14b-chat` |
-
-### Download Commands
-
-```bash
-# List supported models
-python download_qwen.py list
-
-# Download specific model
-python download_qwen.py qwen2-vl-2b
-
-# Verify download
-python download_qwen.py qwen2-vl-2b --verify-only
-
-# Use alternative download method
-python download_qwen.py qwen-7b-chat --method snapshot
-```
-
-## 🔧 Configuration
-
-### Environment Variables (.env)
-
-```bash
-# Nebius Configuration
-NEBIUS_API_KEY=your_api_key_here
-NEBIUS_GPT_ENDPOINT=https://api.nebius.ai/v1/completions
-
-# GPU Settings
-CUDA_VISIBLE_DEVICES=0
-PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
-
-# Paths
-HF_HOME=./cache
-TRANSFORMERS_CACHE=./cache
-```
-
-### Memory Optimization
-
-```python
-# In model_manager.py, adjust precision:
-ModelConfig(
-    name="qwen_vision",
-    type=ModelType.QWEN_VISION,
-    model_id="Qwen/Qwen2-VL-2B-Instruct",
-    precision="int4",  # Options: float16, int8, int4
-    max_memory="8GB"   # Limit per model
-)
-```
-
-## 💻 Usage Examples
-
-### Basic Usage
-
-```python
-from model_manager import ModelOrchestrator, ModelConfig, ModelType
-
-# Initialize
-orchestrator = ModelOrchestrator()
-
-# Register models
-orchestrator.register_model(ModelConfig(
-    name="nebius_gpt",
-    type=ModelType.NEBIUS_GPT,
-    endpoint="https://api.nebius.ai/v1/completions"
-))
-
-# Route request
-response = await orchestrator.route_request(
-    "chat",
-    {"prompt": "Explain quantum computing"}
-)
-```
-
-### Vision Pipeline
-
-```python
-# Analyze image with Qwen, then discuss with Nebius GPT
-pipeline = MultiModelPipeline()
-result = await pipeline.vision_to_chat_pipeline("image.jpg")
-print(result["insights"])
-```
-
-## 🔍 Verification Steps
-
-### 1. GPU Check
-```bash
-nvidia-smi
-python -c "import torch; print(torch.cuda.get_device_name(0))"
-```
-
-### 2. Model Loading Test
-```python
-python -c "
-from transformers import AutoTokenizer
-tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2-VL-2B-Instruct', cache_dir='./models')
-print('✓ Model loading works')
-"
-```
-
-### 3. Memory Monitor
-```bash
-# Watch GPU memory during inference
-watch -n 1 nvidia-smi
-```
-
-### 4. API Connection Test
-```bash
-curl -X POST $NEBIUS_GPT_ENDPOINT \
-  -H "Authorization: Bearer $NEBIUS_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Hello", "max_tokens": 10}'
-```
-
-## ⚠️ Common Issues & Solutions
-
-### Out of Memory (OOM)
-
-```python
-# Solution 1: Use smaller model
-model_id="Qwen/Qwen2-VL-2B-Instruct"  # Instead of 7B
-
-# Solution 2: Increase quantization
-precision="int4"  # Instead of int8 or float16
-
-# Solution 3: Clear cache between models
-orchestrator.memory_manager.cleanup()
-```
-
-### Slow Download
-
-```bash
-# Use HF CLI with resume
-huggingface-cli download Qwen/Qwen2-VL-2B-Instruct \
-  --cache-dir ./models \
-  --resume-download \
-  --local-dir ./models/Qwen_Qwen2-VL-2B-Instruct
-```
-
-### CUDA Version Mismatch
-
-```bash
-# Check CUDA version
-nvcc --version
-nvidia-smi
-
-# Install matching PyTorch
-pip install torch --index-url https://download.pytorch.org/whl/cu118  # For CUDA 11.8
-```
-
-## 📊 Performance Tips
-
-1. **Model Loading Strategy**
-   - Load Nebius GPT client once (lightweight)
-   - Swap local models as needed
-   - Keep only one large model in memory
-
-2. **Batch Processing**
-   ```python
-   # Process multiple items efficiently
-   for batch in chunks(items, batch_size=4):
-       responses = await asyncio.gather(*[
-           orchestrator.route_request("vision", item) 
-           for item in batch
-       ])
-   ```
-
-3. **GPU Memory Management**
-   ```python
-   # Always cleanup after large operations
-   with memory_manager.managed_memory():
-       result = model.generate(prompt)
-   # Memory automatically cleaned
-   ```
-
-## 🔗 API Endpoints (Optional)
-
-If you want to add a REST API:
-
-```python
-# Add to example_usage.py or create api_server.py
-from fastapi import FastAPI
-import uvicorn
-
-app = FastAPI()
-
-@app.post("/chat")
-async def chat(prompt: str):
-    return await orchestrator.route_request("chat", {"prompt": prompt})
-
-@app.post("/vision")
-async def vision(image_url: str, prompt: str):
-    return await orchestrator.route_request("vision", {
-        "prompt": prompt,
-        "images": [load_image(image_url)]
-    })
-
-# Run with: uvicorn api_server:app --host 0.0.0.0 --port 8000
-```
-
-## 📚 Prompt Engineering Guide
-
-### Nebius GPT (Conversation/QA)
-
-```python
-prompt = """
-You are an expert assistant. Follow these guidelines:
-1. Be concise but comprehensive
-2. Use structured output when appropriate
-3. Cite sources when possible
-
-Question: {user_question}
-"""
-```
-
-### Qwen Vision
-
-```python
-prompt = """
-Analyze this image and provide:
-1. Main objects and their positions
-2. Text content (OCR)
-3. Overall context and scene description
-4. Quality assessment
-
-Output format: JSON
-"""
-```
-
-### Qwen Structured Output
-
-```python
-prompt = f"""
-Generate a JSON response following this schema:
-{json.dumps(schema, indent=2)}
-
-Requirements:
-- All fields are required
-- Use appropriate data types
-- Follow the schema exactly
-
-Task: {task_description}
-"""
-```
-
-## 🐛 Debugging
-
-Enable detailed logging:
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-
-# In code
-logger.debug(f"Model loading: {model_id}")
-logger.info(f"GPU Memory: {torch.cuda.memory_allocated()/1e9:.2f}GB")
-```
-
-## 📈 Monitoring
-
-```bash
-# Create monitoring script
-cat > monitor.sh << 'EOF'
-#!/bin/bash
-while true; do
-    clear
-    echo "=== GPU Status ==="
-    nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv
-    echo -e "\n=== Process Status ==="
-    ps aux | grep python | head -5
-    echo -e "\n=== Disk Usage ==="
-    df -h | grep -E "Filesystem|/workspace"
-    sleep 2
-done
-EOF
-chmod +x monitor.sh
-```
-
-## 🚢 Production Deployment
-
-For production on RunPod or similar:
-
-1. **Use the Docker image**
-2. **Set resource limits**
-3. **Enable health checks**
-4. **Use environment-specific configs**
-5. **Implement request queuing**
-6. **Add monitoring/alerting**
-
-## 📞 Support
-
-- Check GPU compatibility: `torch.cuda.get_device_capability()`
-- Verify model files: `python download_qwen.py list`
-- Test memory limits: `python example_usage.py`
-
----
-
-**Next Steps:**
-1. Configure your Nebius API key in `.env`
-2. Download your first model
-3. Run the example to verify everything works
-4. Customize the orchestrator for your use case
-
 # AI-Powered Video Analysis System
 
 A production-ready, scalable video analysis system that combines local vision AI models with cloud-based language models for intelligent video understanding. Built with Temporal workflow orchestration for robust parallel processing.
@@ -395,9 +7,10 @@ A production-ready, scalable video analysis system that combines local vision AI
 ### System Components
 
 1. **Vision AI Processing** (`temporal_worker_gpu.py`)
-   - Local Qwen2.5-VL-7B vision model for frame analysis
-   - GPU-accelerated inference with automatic mixed precision
+   - Local **Qwen2.5-VL-7B-Instruct** vision model for frame analysis
+   - GPU-accelerated inference with 4-bit/8-bit quantization
    - Detailed frame-by-frame descriptions with timestamp mapping
+   - Automatic mixed precision for optimal performance
 
 2. **Workflow Orchestration** (Temporal)
    - Distributed task queue for parallel frame processing
@@ -412,9 +25,10 @@ A production-ready, scalable video analysis system that combines local vision AI
 
 4. **Model Orchestration** (`model_manager.py`)
    - Multi-model management system
-   - Intelligent request routing
-   - GPU memory optimization with 4-bit quantization
-   - Automatic fallback mechanisms
+   - Hybrid architecture: Qwen2.5-VL-7B (local) + Nebius GPT-OSS-120B (cloud)
+   - Intelligent request routing (vision → local, chat → cloud)
+   - GPU memory optimization with 4-bit/8-bit quantization
+   - Automatic cleanup and fallback mechanisms
 
 ## 📊 Code Quality
 
@@ -436,14 +50,15 @@ A production-ready, scalable video analysis system that combines local vision AI
 
 ### Prerequisites
 - Python 3.8+
-- NVIDIA GPU with 16GB+ VRAM (recommended: 24GB for multi-worker)
+- NVIDIA GPU with 8GB+ VRAM (16GB+ recommended for multi-worker)
 - CUDA 11.8+ and cuDNN
-- 50GB+ free disk space for models
+- 20-30GB free disk space for Qwen2.5-VL-7B model
+- RAM: 16GB+ system memory
 
 ### 1. Clone and Navigate
 ```bash
-git clone <repository>
-cd video-analysis-system
+git clone https://github.com/Shaik-mohd-huzaifa/Video-Analyzer.git
+cd Video-Analyzer
 ```
 
 ### 2. Install Dependencies
@@ -460,13 +75,27 @@ curl -sSf https://temporal.download/cli.sh | sh
 sudo mv temporal /usr/local/bin/
 ```
 
-### 3. Download Qwen Vision Model
+### 3. Download Vision Model
+
+#### Available Models
+
+| Model | Size | Purpose | Memory Required | Download Command |
+|-------|------|---------|-----------------|------------------|
+| **Qwen2.5-VL-7B-Instruct** | 15GB | Vision Analysis (Current) | ~8GB (int8) | See below |
+| Qwen2.5-VL-2B-Instruct | 5GB | Vision (Lightweight) | ~3GB (int8) | Alternative option |
+
+#### Download Qwen2.5-VL-7B (Currently Used)
 
 The system will automatically download the model on first run, or manually:
 ```bash
-# Using Hugging Face CLI
+# Using Hugging Face CLI (recommended)
 huggingface-cli download Qwen/Qwen2.5-VL-7B-Instruct --local-dir ./models/Qwen_Qwen2.5-VL-7B-Instruct
+
+# Alternative: Using Python
+python -c "from transformers import AutoModelForVision2Seq; AutoModelForVision2Seq.from_pretrained('Qwen/Qwen2.5-VL-7B-Instruct', cache_dir='./models')"
 ```
+
+**Note**: The model files are ~15GB. Ensure you have sufficient disk space and a stable internet connection.
 
 ### 4. Configure Environment
 
@@ -533,19 +162,30 @@ python start_multiple_workers.py 10
 
 ## 📡 API Usage
 
-### Upload Video
+### Analyze Video
 ```bash
-curl -X POST "http://localhost:8000/upload" \
-  -F "file=@video.mp4"
+curl -X POST "http://localhost:8000/analyze" \
+  -F "video=@video.mp4" \
+  -F "prompt=Describe what happens in this video"
 ```
 
 Response:
 ```json
 {
   "session_id": "550e8400-e29b-41d4-a716",
-  "message": "Video uploaded successfully", 
+  "status": "starting",
+  "message": "Video analysis workflow started successfully",
   "total_frames": 150,
-  "workflow_id": "video-analysis-550e8400"
+  "total_batches": 15,
+  "duration_seconds": 150.5,
+  "frames_per_batch": 10,
+  "prompt_used": "custom",
+  "storage": "json_files",
+  "next_steps": {
+    "check_status": "/status/550e8400-e29b-41d4-a716",
+    "chat_when_ready": "/chat",
+    "get_full_context": "/context/550e8400-e29b-41d4-a716"
+  }
 }
 ```
 
@@ -587,9 +227,76 @@ Response:
 }
 ```
 
-### Get Available Summaries
+### List All Sessions
 ```bash
-curl "http://localhost:8000/summaries/{session_id}"
+curl "http://localhost:8000/sessions?limit=50"
+```
+
+Response:
+```json
+{
+  "sessions": [
+    {
+      "session_id": "550e8400-e29b-41d4-a716",
+      "status": "completed",
+      "progress_percentage": 100.0,
+      "total_frames": 150,
+      "processed_frames": 150
+    }
+  ],
+  "total_returned": 1,
+  "storage": "json_files"
+}
+```
+
+### Get Full Context
+```bash
+curl "http://localhost:8000/context/{session_id}"
+```
+
+Response:
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716",
+  "status": "completed",
+  "progress": {
+    "processed_frames": 150,
+    "total_frames": 150,
+    "progress_percentage": 100.0
+  },
+  "batch_summaries": [...],
+  "total_batches": 15
+}
+```
+
+### Delete Session
+```bash
+curl -X DELETE "http://localhost:8000/sessions/{session_id}"
+```
+
+Response:
+```json
+{
+  "message": "Session 550e8400-e29b-41d4-a716 deleted successfully",
+  "session_id": "550e8400-e29b-41d4-a716",
+  "storage": "json_files"
+}
+```
+
+### Health Check
+```bash
+curl "http://localhost:8000/health"
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "temporal_connected": true,
+  "cloud_gpt_configured": true,
+  "sessions_active": 3,
+  "storage": "json_files"
+}
 ```
 
 ## ⚙️ Configuration Options
@@ -619,12 +326,12 @@ max_workers = 5  # Parallel batches
 
 ### GPU Memory Management
 
-| Workers | GPU VRAM | Recommended GPU |
-|---------|----------|-----------------|
-| 1       | 8-10 GB  | RTX 3080        |
-| 2-3     | 16-20 GB | RTX 4090        |
-| 4-5     | 24-32 GB | A5000/A6000     |
-| 6-10    | 40-48 GB | A100            |
+| Workers | GPU VRAM | Recommended GPU | Notes |
+|---------|----------|-----------------|-------|
+| 1       | 8-10 GB  | RTX 3080/4070   | Qwen2.5-VL-7B with int8 quantization |
+| 2-3     | 16-20 GB | RTX 4090        | Multiple instances with memory sharing |
+| 4-5     | 24-32 GB | A5000/A6000     | Optimal for production workloads |
+| 6-10    | 40-48 GB | A100            | Enterprise-scale processing |
 
 ### Optimization Tips
 
@@ -653,8 +360,12 @@ video-analysis-system/
 ├── requirements.txt            # Python dependencies
 ├── api_requirements.txt        # API dependencies
 ├── .env                        # Environment configuration
-├── models/                     # Model files (auto-downloaded)
-│   └── Qwen_Qwen2.5-VL-7B-Instruct/
+├── models/                     # Model files
+│   ├── Qwen_Qwen2.5-VL-7B-Instruct/  # Vision model (15GB)
+│   │   ├── *.json             # Config files (included in repo)
+│   │   ├── *.txt              # Vocab files (included in repo)
+│   │   └── *.safetensors      # Model weights (download separately)
+│   └── models--Qwen--Qwen2.5-VL-7B-Instruct/  # HF cache
 └── session_data/              # Session storage (auto-created)
 ```
 
@@ -721,6 +432,5 @@ Contributions welcome! Please follow:
 ## 📧 Support
 
 For issues and questions:
-- GitHub Issues: [Create Issue]
-- Documentation: [Wiki]
-- Contact: support@example.com
+- GitHub Issues: [https://github.com/Shaik-mohd-huzaifa/Video-Analyzer/issues](https://github.com/Shaik-mohd-huzaifa/Video-Analyzer/issues)
+- Repository: [https://github.com/Shaik-mohd-huzaifa/Video-Analyzer](https://github.com/Shaik-mohd-huzaifa/Video-Analyzer)
