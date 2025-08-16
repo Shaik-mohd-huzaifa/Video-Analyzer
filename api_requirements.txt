@@ -1,0 +1,41 @@
+# Video Analysis API Requirements
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Redis for session management
+redis==5.0.1
+redis-py-cluster==2.1.3
+
+# Video processing
+opencv-python==4.8.1.78
+pillow==10.0.1
+numpy==1.24.3
+
+# Temporal workflow (optional - falls back to ThreadPoolExecutor)
+temporalio==1.4.0
+
+# Model processing (already in main requirements.txt)
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.35.0
+accelerate>=0.24.0
+bitsandbytes>=0.41.0
+
+# Data processing
+pandas==2.1.3
+asyncio-throttle==1.0.2
+
+# Logging and monitoring
+structlog==23.2.0
+prometheus-client==0.19.0
+
+# Environment management
+python-dotenv==1.0.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2

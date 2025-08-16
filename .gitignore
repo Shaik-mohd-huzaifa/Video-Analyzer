@@ -1,0 +1,46 @@
+# Environment variables
+.env
+
+# Model files - ignore large binary files but keep configs
+models/**/*.safetensors
+models/**/blobs/
+models/**/.locks/
+models/**/snapshots/*/
+models/**/.no_exist/
+
+# Keep these model files:
+# - *.json (configs, chat templates, etc.)  
+# - *.txt (merges, vocab, etc.)
+# - README.md files
+# - refs/ directory (small reference files)
+
+# Session data and temporary files  
+session_data/
+temp_frames/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+temporal_server.log
+temporal.log
+
+# OS files
+.DS_Store
+Thumbs.db
